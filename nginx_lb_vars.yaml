@@ -1,0 +1,44 @@
+---
+nginx_enable: true
+nginx_start: true
+nginx_type: opensource
+nginx_install_from: nginx_repository
+nginx_branch: mainline
+
+nginx_http_template_enable: true
+nginx_http_template:
+  default:
+    template_file: http/default.conf.j2
+    conf_file_name: default.conf
+    conf_file_location: /etc/nginx/conf.d/
+    server_name: localhost
+    listen:
+      listen_localhost:
+        ip: 0.0.0.0
+        port: 80
+        opts: []
+    error_page: /usr/share/nginx/html
+    autoindex: false
+    reverse_proxy:
+      locations:
+        backend:
+          location: /
+          proxy_pass: http://backend_servers
+    upstreams:
+      upstream_1:
+        name: backend_servers
+        lb_method: least_conn
+        zone_name: backend
+        zone_size: 64k
+        sticky_cookie: false
+        servers:
+          backend_server_1:
+            address: webserver1
+            port: 80
+            weight: 1
+            health_check: max_fails=3 fail_timeout=5s
+          backend_server_2:
+            address: webserver2
+            port: 80
+            weight: 1
+            health_check: max_fails=3 fail_timeout=5s    

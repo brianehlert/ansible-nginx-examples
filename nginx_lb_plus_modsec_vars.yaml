@@ -1,0 +1,49 @@
+---
+nginx_enable: true
+nginx_start: true
+nginx_type: plus
+nginx_delete_license: false
+nginx_license: # this is the Ansible host location to copy out, N+ with modsec is a unique license
+  certificate: "{{playbook_dir}}/license/nginx-repo.crt"
+  key: "{{playbook_dir}}/license/nginx-repo.key"
+nginx_rest_api_enable: true
+nginx_rest_api_write: true
+nginx_rest_api_port: 8080
+nginx_modules:
+  waf: true
+
+nginx_http_template_enable: true
+nginx_http_template:
+  default:
+    template_file: http/default.conf.j2
+    conf_file_name: default.conf
+    conf_file_location: /etc/nginx/conf.d/
+    server_name: localhost
+    server_custom_options: 
+      - modsecurity on
+      - modsecurity_rules_file /etc/nginx/modsec/main.conf
+    listen:
+      listen_localhost:
+        ip: 0.0.0.0
+        port: 80
+        opts: []
+    error_page: /usr/share/nginx/html
+    autoindex: false
+    reverse_proxy:
+      locations:
+        backend:
+          location: /
+          proxy_pass: http://backend_servers
+    upstreams:
+      upstream_1:
+        name: backend_servers
+        lb_method: least_conn
+        zone_name: backend
+        zone_size: 64k
+        sticky_cookie: false
+        servers:
+          backend_server_1:
+            address: webserver1
+            port: 3000
+            weight: 1
+            health_check: max_fails=3 fail_timeout=5s

@@ -1,0 +1,125 @@
+---
+# # for some reason this does not work with the Jinja template
+- hosts: localhost
+
+  tasks:
+  - name: read webservers file
+    shell: cat {{playbook_dir}}/webservers
+    register: webservers
+
+  - name: output
+    debug:
+      var: webservers
+
+# deploy and configure nginx lb
+- hosts: loadbalancers
+  remote_user: ubuntu
+  become: true
+
+  pre_tasks:
+  - name: load the vars
+    include_vars: 
+      file: "{{playbook_dir}}/nginx_lb_plus_modsec_vars.yaml"
+
+  - name: replace webserverUno
+    set_fact:
+      nginx_http_template: "{{ nginx_http_template|combine({'default': {'upstreams': {'upstream_1': {'servers': {'backend_server_1': {'address': hostvars['localhost']['webservers'].stdout_lines[1]}}}}}}, recursive=True) }}"
+
+  # - name: replace webserverDos
+  #   set_fact:
+  #     nginx_http_template: "{{ nginx_http_template|combine({'default': {'upstreams': {'upstream_1': {'servers': {'backend_server_2': {'address': hostvars['localhost']['webservers'].stdout_lines[2]}}}}}}, recursive=True) }}"
+
+  - name: output the config
+    debug:
+      var: nginx_http_template
+
+  - name: ensure the modsec config directory exists
+    file:
+      path: /etc/nginx/modsec
+      state: directory
+
+
+  roles:
+    - ansible-role-nginx
+
+  post_tasks:
+  # https://docs.nginx.com/nginx-waf/admin-guide/nginx-plus-modsecurity-waf-owasp-crs/
+  - name: pull owasp-modsecurity-crs
+    get_url:
+      url: https://github.com/SpiderLabs/owasp-modsecurity-crs/archive/v3.2.0.tar.gz
+      dest: /home/ubuntu
+
+  - name: unzip owasp-modsecurity-crs to /etc/nginx/modsec/owasp
+    unarchive:
+      remote_src: yes
+      src: /home/ubuntu/owasp-modsecurity-crs-3.2.0.tar.gz
+      dest: /etc/nginx/modsec
+      keep_newer: yes
+
+  # - name: what do I have
+  #   shell: ls -l /etc/nginx/modsec/owasp-modsecurity-crs-3.2.0/rules
+  #   register: owasp
+
+  # - debug:
+  #     var: owasp
+
+  - name: copy crs-setup.conf.example crs-setup.conf
+    copy:
+      remote_src: yes
+      src: /etc/nginx/modsec/owasp-modsecurity-crs-3.2.0/crs-setup.conf.example
+      dest: /etc/nginx/modsec/owasp-modsecurity-crs-3.2.0/crs-setup.conf
+
+  - name: get list of rule configurations
+    find:
+      file_type: file
+      paths: /etc/nginx/modsec/owasp-modsecurity-crs-3.2.0/rules
+      patterns: "*.conf"
+    register: configs
+
+ 
+  # build the main.conf for modsec
+  - name: copy modsec main.conf shell config
+    copy:
+      src: "{{playbook_dir}}/modsec_owasp.conf"
+      dest: /etc/nginx/modsec/main.conf
+      force: yes
+
+      
+  - name: Set crs-setup.conf
+    lineinfile:
+      create: yes
+      path: /etc/nginx/modsec/main.conf
+      line: "include /etc/nginx/modsec/owasp-modsecurity-crs-3.2.0/crs-setup.conf"
+
+  - name: add includes into /etc/nginx/modsec/main.conf for each conf file in /owasp-modsecurity-crs-3.2.0/rules
+    lineinfile:
+      create: yes
+      path: /etc/nginx/modsec/main.conf
+      line: "include {{item.path}}"
+    with_items: "{{configs.files}}"
+
+  - name: we have what now
+    shell: cat /etc/nginx/modsec/main.conf
+    register: mainconf
+
+  - debug:
+      var: mainconf
+
+  - name: enable blocking
+    lineinfile:
+      path: /etc/nginx/modsec/modsecurity.conf
+      regexp: SecRuleEngine DetectionOnly
+      line: SecRuleEngine On
+      state: present
+
+  - name: test the config
+    shell: nginx -t
+    register: configtest
+
+  - debug:
+      var: configtest
+
+  - name: restart nginx
+    service:
+      name: nginx
+      state: reloaded

@@ -1,0 +1,68 @@
+---
+# # for some reason this does not work with the Jinja template
+- hosts: localhost
+
+  tasks:
+  - name: read webservers file
+    shell: cat {{playbook_dir}}/webservers
+    register: webservers
+
+  - name: output
+    debug:
+      var: webservers
+
+# deploy and configure nginx lb
+- hosts: loadbalancers
+  remote_user: ubuntu
+  become: true
+
+  pre_tasks:
+  - name: load the vars
+    include_vars: 
+      file: "{{playbook_dir}}/nginx_lb_plus_modsec_vars.yaml"
+
+  - name: replace webserverUno
+    set_fact:
+      nginx_http_template: "{{ nginx_http_template|combine({'default': {'upstreams': {'upstream_1': {'servers': {'backend_server_1': {'address': hostvars['localhost']['webservers'].stdout_lines[1]}}}}}}, recursive=True) }}"
+
+  # - name: replace webserverDos
+  #   set_fact:
+  #     nginx_http_template: "{{ nginx_http_template|combine({'default': {'upstreams': {'upstream_1': {'servers': {'backend_server_2': {'address': hostvars['localhost']['webservers'].stdout_lines[2]}}}}}}, recursive=True) }}"
+
+  - name: output the config
+    debug:
+      var: nginx_http_template
+
+  - name: ensure the modsec config directory exists
+    file:
+      path: /etc/nginx/modsec
+      state: directory
+
+
+  roles:
+    - ansible-role-nginx
+
+  post_tasks:
+  - name: set modsec config
+    copy:
+      src: "{{playbook_dir}}/modsec_rules.conf"
+      dest: /etc/nginx/modsec/main.conf
+
+  - name: enable blocking
+    lineinfile:
+      path: /etc/nginx/modsec/modsecurity.conf
+      regexp: SecRuleEngine DetectionOnly
+      line: SecRuleEngine On
+      state: present
+
+  - name: test the config
+    shell: nginx -t
+    register: configtest
+
+  - debug:
+      var: configtest
+
+  - name: restart nginx
+    service:
+      name=nginx
+      state=restarted
