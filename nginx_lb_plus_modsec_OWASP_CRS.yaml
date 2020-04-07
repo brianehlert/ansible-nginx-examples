@@ -40,7 +40,7 @@
 
 
   roles:
-    - ansible-role-nginx
+    - nginxinc.nginx
 
   post_tasks:
   # https://docs.nginx.com/nginx-waf/admin-guide/nginx-plus-modsecurity-waf-owasp-crs/

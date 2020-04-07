@@ -4,7 +4,7 @@
   remote_user: ubuntu
   become: true
   roles:
-    - ansible-role-nginx
+    - nginxinc.nginx
   vars:
     nginx_http_template_enable: true
     nginx_http_template:

@@ -40,7 +40,7 @@
 
 
   roles:
-    - ansible-role-nginx
+    - nginxinc.nginx
 
   post_tasks:
   - name: set modsec config

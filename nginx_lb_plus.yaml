@@ -34,7 +34,7 @@
       var: nginx_http_template
 
   roles:
-    - ansible-role-nginx
+    - nginxinc.nginx
 
   # post_tasks:
   # - name: restart nginx
