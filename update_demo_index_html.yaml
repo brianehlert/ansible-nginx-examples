@@ -1,0 +1,16 @@
+---
+ - hosts: webservers
+   remote_user: ubuntu
+   become: true
+
+   tasks: 
+    - name: copy demo_index.html to remote
+      copy:
+        src: demo_index.html
+        dest: /usr/share/nginx/html/demo_index.html
+        backup: yes
+
+    - name: reload nginx
+      service: 
+        name: nginx 
+        state: restarted
