@@ -2,7 +2,7 @@
 nginx_enable: true
 nginx_start: true
 nginx_type: plus
-nginx_delete_license: false
+nginx_delete_license: true
 nginx_license: # this is the Ansible host location to copy out, N+ with modsec is a unique license
   certificate: "{{playbook_dir}}/license/nginx-repo.crt"
   key: "{{playbook_dir}}/license/nginx-repo.key"
